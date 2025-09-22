@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Simulation — Système solaire (double échelle)</title>
+<style>
+  :root{
+    --bg:#05060a;
+    --panel:#0f1724cc;
+    --accent:#ffd36b;
+    --glass: rgba(255,255,255,0.03);
+    --text:#d8e3ef;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+  body{
+    display:flex;
+    gap:18px;
+    padding:18px;
+    background:
+      radial-gradient(1200px 600px at 10% 10%, #0b1220 0%, transparent 10%),
+      linear-gradient(180deg,#02030a 0%, var(--bg) 100%);
+    color:var(--text);
+    box-sizing:border-box;
+  }
+  .stage{flex:1 1 0;min-width:320px;min-height:480px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent 30%);border-radius:14px;padding:12px;box-shadow:0 6px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);display:flex;flex-direction:column;}
+  .canvas-wrap{flex:1 1 0;position:relative;border-radius:10px;overflow:hidden;background: radial-gradient(circle at 40% 30%, rgba(255,255,255,0.02), transparent 6%), radial-gradient(circle at 70% 70%, rgba(255,255,255,0.01), transparent 6%);}
+  canvas{width:100%;height:100%;display:block;background:transparent; image-rendering:optimizeQuality;}
+  .controls{margin-top:12px;display:flex;gap:12px;align-items:center;}
+  .panel{background:var(--panel);padding:10px;border-radius:10px;display:flex;gap:8px;align-items:center;box-shadow: 0 4px 18px rgba(1,8,25,0.6);}
+  .panel input[type=range]{width:220px;}
+  .btn{background:var(--glass);border:1px solid rgba(255,255,255,0.04);color:var(--text);padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600;}
+  .btn:active{transform:translateY(1px);}
+  .info{margin-left:auto;color:#bcd3ff;font-size:14px;}
+  .sidebar{width:320px;max-width:40%;min-width:220px;display:flex;flex-direction:column;gap:12px;}
+  .card{padding:14px;background:var(--panel);border-radius:12px;box-shadow: 0 6px 24px rgba(0,0,0,0.6);}
+  .title{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .title h3{margin:0;font-size:16px;color:var(--accent);}
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;}
+  .legend .row{display:flex;gap:8px;align-items:center;}
+  .dot{width:12px;height:12px;border-radius:50%;}
+  .small{font-size:13px;color:#cdd7ea}
+  .option{display:flex;gap:8px;align-items:center;margin-top:8px;}
+  .option label{font-size:13px;color:#cdd7ea}
+  footer.note{font-size:12px;color:#9fb0d8;margin-top:8px;}
+  @media (max-width:900px){body{flex-direction:column;}.sidebar{width:100%;}}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="canvas-wrap"><canvas id="space"></canvas></div>
+    <div class="controls">
+      <div class="panel">
+        <button id="playBtn" class="btn">Pause</button>
+        <button id="centerBtn" class="btn">Centrer</button>
+        <div style="width:10px"></div>
+        <div style="display:flex;flex-direction:column;">
+          <label style="font-size:12px;color:#cdd7ea">Vitesse de simulation</label>
+          <input id="speed" type="range" min="0" max="200" value="6">
+        </div>
+        <div style="width:12px"></div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;">
+          <div class="info">Jour simulé : <span id="simDay">0</span></div>
+          <div class="info">Multiplier : <span id="speedVal">6x</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <aside class="sidebar">
+    <div class="card"><div class="title"><h3>Planètes</h3></div><div class="legend" id="legend"></div></div>
+    <div class="card"><div class="title"><h3>Options</h3></div>
+      <div class="option"><input id="showTrails" type="checkbox" checked><label for="showTrails">Traces</label></div>
+      <div class="option"><input id="showOrbits" type="checkbox" checked><label for="showOrbits">Orbites</label></div>
+      <div class="option"><input id="showLabels" type="checkbox" checked><label for="showLabels">Noms</label></div>
+      <div class="option"><input id="logScale" type="checkbox"><label for="logScale">Taille logarithmique</label></div>
+    </div>
+  </aside>
+
+<script>
+(() => {
+  const canvas = document.getElementById('space');
+  const ctx = canvas.getContext('2d',{alpha:true});
+  const planets = [
+    { name: "Mercure", r:2439.7, a:0.387, period:87.969, color:"#bfb8a5" },
+    { name: "Vénus",  r:6051.8, a:0.723, period:224.701, color:"#e0c98f" },
+    { name: "Terre",  r:6371.0, a:1.000, period:365.256, color:"#4da6ff" },
+    { name: "Mars",   r:3389.5, a:1.524, period:686.980, color:"#d36a3a" },
+    { name: "Jupiter",r:69911,  a:5.204, period:4332.59, color:"#e0a97a" },
+    { name: "Saturne",r:58232,  a:9.582, period:10759.2, color:"#f2d8a5" },
+    { name: "Uranus", r:25362,  a:19.201, period:30685.4, color:"#9fe3e9" },
+    { name: "Neptune",r:24622,  a:30.047, period:60189.0, color:"#4b6ef6" }
+  ];
+  let W=600,H=600;const DPR=window.devicePixelRatio||1;
+  const ui={speed:6,paused:false,simDay:0,showTrails:true,showOrbits:true,showLabels:true,logScale:false};
+  function resize(){const rect=canvas.getBoundingClientRect();W=Math.floor(rect.width);H=Math.floor(rect.height);canvas.width=W*DPR;canvas.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}window.addEventListener('resize',resize);
+  function planetDisplayRadius(r,log=false){return log?Math.max(2,Math.log10(r)*2.6):Math.max(2,Math.sqrt(r)*0.04);}
+  const playBtn=document.getElementById('playBtn'),speedRange=document.getElementById('speed'),speedVal=document.getElementById('speedVal'),simDayEl=document.getElementById('simDay'),centerBtn=document.getElementById('centerBtn');
+  const showTrailsCb=document.getElementById('showTrails'),showOrbitsCb=document.getElementById('showOrbits'),showLabelsCb=document.getElementById('showLabels'),logScaleCb=document.getElementById('logScale');
+  playBtn.onclick=()=>{ui.paused=!ui.paused;playBtn.textContent=ui.paused?"Play":"Pause";};
+  speedRange.oninput=()=>{ui.speed=+speedRange.value;speedVal.textContent=ui.speed+"x";};
+  centerBtn.onclick=()=>{view.offsetX=0;view.offsetY=0;view.scale=1;};
+  showTrailsCb.onchange=()=>ui.showTrails=showTrailsCb.checked;
+  showOrbitsCb.onchange=()=>ui.showOrbits=showOrbitsCb.checked;
+  showLabelsCb.onchange=()=>ui.showLabels=showLabelsCb.checked;
+  logScaleCb.onchange=()=>ui.logScale=logScaleCb.checked;
+  document.getElementById('legend').innerHTML=planets.map(p=>`<div class="row"><div class="dot" style="background:${p.color}"></div><div><strong>${p.name}</strong><br><span style="font-size:12px;color:#bcd3ff">${p.a} AU • ${Math.round(p.period)} j</span></div></div>`).join("");
+  const view={offsetX:0,offsetY:0,scale:1};let isPan=false,panStart=null;
+  canvas.onwheel=e=>{e.preventDefault();const f=1+(e.deltaY<0?0.1:-0.1);view.scale*=f;};
+  canvas.onmousedown=e=>{isPan=true;panStart={x:e.clientX,y:e.clientY,ox:view.offsetX,oy:view.offsetY};};
+  window.onmouseup=()=>isPan=false;
+  window.onmousemove=e=>{if(isPan){view.offsetX=panStart.ox+(e.clientX-panStart.x);view.offsetY=panStart.oy+(e.clientY-panStart.y);}};
+  let last=performance.now();
+  function draw(){
+    resize();
+    const minDim=Math.min(W,H);
+    const pxPerAU_outer=(minDim*0.9)/30;   // Échelle pour planètes externes
+    const pxPerAU_inner=(minDim*0.9)/6;    // Échelle amplifiée pour internes
+    const sunRadiusPx=Math.max(14,minDim*0.02);
+    ctx.clearRect(0,0,W,H);
+    ctx.save();
+    ctx.translate(W/2+view.offsetX,H/2+view.offsetY);
+    ctx.scale(view.scale,view.scale);
+    // Soleil
+    ctx.beginPath();ctx.fillStyle="#ffd36b";ctx.arc(0,0,sunRadiusPx,0,2*Math.PI);ctx.fill();
+    planets.forEach(p=>{
+      const th=(ui.simDay/p.period)*2*Math.PI;
+      const scale=(p.a<=2?pxPerAU_inner:pxPerAU_outer); // double échelle
+      const rpx=p.a*scale;
+      const x=Math.cos(th)*rpx,y=Math.sin(th)*rpx;
+      if(ui.showOrbits){ctx.beginPath();ctx.strokeStyle="rgba(200,220,255,0.15)";ctx.arc(0,0,rpx,0,2*Math.PI);ctx.stroke();}
+      const pr=planetDisplayRadius(p.r,ui.logScale);
+      ctx.beginPath();ctx.fillStyle=p.color;ctx.arc(x,y,pr,0,2*Math.PI);ctx.fill();
+      if(ui.showLabels){ctx.fillStyle="#fff";ctx.font="10px sans-serif";ctx.fillText(p.name,x,y-pr-4);}
+    });
+    ctx.restore();
+  }
+  function step(now){const dt=now-last;last=now;if(!ui.paused){ui.simDay+=ui.speed*(dt/16.67);}draw();simDayEl.textContent=Math.round(ui.simDay);requestAnimationFrame(step);}requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
